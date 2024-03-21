@@ -1,0 +1,72 @@
+import yfinance as yf
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import csv
+import datetime as datetime
+from colorama import Fore, Style
+from sklearn.preprocessing import MinMaxScaler
+from matplotlib.dates import DateFormatter
+
+
+# Download Bitcoin price data
+df_btc_daily = yf.download('BTC-USD', start='2019-03-17', end='2024-03-04')['Adj Close']
+df_btc_weekly = df_btc_daily.resample('W').last()
+
+# Read the sentiment data from the CSV file
+file_path = "Sentiment_analysis/multiTimeline-4.csv"
+df_sentiment = pd.read_csv(file_path, skiprows=1)
+
+# Convert the 'Week' column to datetime and set it as the index
+df_sentiment['Week'] = pd.to_datetime(df_sentiment['Week'])
+df_sentiment.set_index('Week', inplace=True)
+
+# Define halving dates
+halving_dates = {
+    'November 8, 2012': '2012-11-28',
+    'July 9, 2016': '2016-07-09',
+    'May 11, 2020': '2020-05-11',
+    'April 19, 2024': '2024-04-19'
+}
+
+# Convert halving dates to datetime objects
+halving_dates = {key: pd.to_datetime(value) for key, value in halving_dates.items()}
+
+# Normalize the Bitcoin price data
+scaler_btc = MinMaxScaler()
+btc_values_scaled = scaler_btc.fit_transform(df_btc_weekly.values.reshape(-1, 1))
+df_btc_weekly_scaled = pd.DataFrame(btc_values_scaled, 
+                                    index=df_btc_weekly.index, 
+                                    columns=['BTC Price'])
+
+# Normalize the sentiment data
+scaler_sentiment = MinMaxScaler()
+sentiment_values_scaled = scaler_sentiment.fit_transform(df_sentiment.values)
+df_sentiment_scaled = pd.DataFrame(sentiment_values_scaled, 
+                                   index=df_sentiment.index, 
+                                   columns=df_sentiment.columns)
+
+# Plotting
+plt.figure(figsize=(10, 6))
+plt.plot(df_sentiment_scaled.index, df_sentiment_scaled.iloc[:, 0], marker='o', linestyle='-', label='Sentiment Analysis')
+plt.plot(df_btc_weekly_scaled.index, df_btc_weekly_scaled, marker='o', linestyle='-', color='orange', label='Bitcoin Price')
+
+# Adding vertical lines for halving dates if they exist or are closest to the DataFrame index
+for halving_date in halving_dates.values():
+    nearest_date = min(df_sentiment_scaled.index, key=lambda x: abs(x - halving_date))
+    plt.axvline(x=nearest_date, color='r', linestyle='--')
+
+# Adding labels and title
+plt.xlabel('Week')
+plt.ylabel('Normalized Value')
+plt.title('Sentiment Analysis and Normalized Bitcoin Price over Time')
+plt.legend()
+
+# Format the date ticks on x-axis
+date_form = DateFormatter("%Y-%m-%d")
+plt.gca().xaxis.set_major_formatter(date_form)
+plt.xticks(rotation=45)
+
+# Display the plot
+plt.tight_layout()
+plt.show()
